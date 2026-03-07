@@ -1,5 +1,7 @@
 from argparse import Namespace
 from .neural_layer import NeuralLayer
+import numpy as np
+
 
 
 class NeuralNetwork:
@@ -110,25 +112,37 @@ class NeuralNetwork:
 
     def set_weights(self, weights):
         """
-        Set weights and biases of all layers.
-
-        Expected format:
-        weights = [
-            (W1, b1),
-            (W2, b2),
-            ...
-        ]
+        Supports all of these formats:
+        1. [(W1, b1), (W2, b2), ...]
+        2. [W1, b1, W2, b2, ...]
+        3. [{"W": W1, "b": b1}, {"W": W2, "b": b2}, ...]
         """
-        if len(weights) != len(self.layers):
+        weights = list(weights)
+        normalized = []
+    
+        # Case 1: flat list [W1, b1, W2, b2, ...]
+        if len(weights) == 2 * len(self.layers):
+            normalized = [
+                (weights[i], weights[i + 1])
+                for i in range(0, len(weights), 2)
+            ]
+
+        # Case 2/3: one entry per layer
+        elif len(weights) == len(self.layers):
+            for item in weights:
+                if isinstance(item, dict):
+                    W = item["W"]
+                    b = item["b"]
+                else:
+                    W, b = item
+                normalized.append((W, b))
+
+        else:
             raise ValueError("Number of weight sets must match number of layers")
 
-        for layer, params in zip(self.layers, weights):
-            if len(params) != 2:
-                raise ValueError("Each layer weight entry must be a tuple/list: (W, b)")
-
-            W, b = params
-            layer.W = W.copy()
-            layer.b = b.copy()
+        for layer, (W, b) in zip(self.layers, normalized):
+            layer.W = np.array(W, copy=True)
+            layer.b = np.array(b, copy=True)
 
     def get_weights(self):
         """

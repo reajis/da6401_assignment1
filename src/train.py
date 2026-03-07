@@ -96,12 +96,12 @@ def parse_arguments():
     parser.add_argument(
         "--model_save_path",
         type=str,
-        default="./best_model.npy"
+        default="./src/best_model.npy"
     )
     parser.add_argument(
         "--config_save_path",
         type=str,
-        default="./best_config.json"
+        default="./src/best_config.json"
     )
 
     return parser.parse_args()
@@ -178,11 +178,14 @@ def main():
     args.hidden_size = normalize_hidden_sizes(args.hidden_size, args.num_layers)
 
     # Initialize W&B
+    wandb_mode = os.environ.get("WANDB_MODE", "disabled")
+
     wandb.init(
         project=args.wandb_project,
         config=vars(args),
-        name=f"{args.optimizer}_lr{args.learning_rate}_{args.activation}"
-    )
+        name=f"{args.optimizer}_lr{args.learning_rate}_{args.activation}",
+        mode=wandb_mode
+)
 
     # Skip saving model/config files during sweep runs
     save_outputs = not (wandb.run is not None and wandb.run.sweep_id is not None)
