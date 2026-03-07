@@ -1,3 +1,4 @@
+ HEAD
 # Assignment 1: Multi-Layer Perceptron for Image Classification
 
 ## Overview
@@ -20,4 +21,6 @@ For questions or issues, please contact the teaching staff or post on the course
 ---
 
 Good luck with your implementation!
+
+# da6401_assignment1
 
