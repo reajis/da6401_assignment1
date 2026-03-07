@@ -2,14 +2,22 @@ from .neural_layer import NeuralLayer
 
 class NeuralNetwork:
     def __init__(self,
-                 input_size,
-                 hidden_sizes,
-                 num_layers,
-                 output_size,
+                 input_size=784,
+                 hidden_sizes=None,
+                 num_layers=None,
+                 output_size=10,
                  activation="relu",
                  weight_init="random"):
 
         self.layers = []
+
+        # Default hidden_sizes
+        if hidden_sizes is None:
+            hidden_sizes = []
+
+        # If user passes a single int, convert to list
+        if isinstance(hidden_sizes, int):
+            hidden_sizes = [hidden_sizes]
 
         
         # (Direct connection from input to output)
