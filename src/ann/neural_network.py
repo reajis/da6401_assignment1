@@ -112,68 +112,118 @@ class NeuralNetwork:
 
     def set_weights(self, weights):
         """
-        Supports:
-        1. {"W1": ..., "b1": ..., "W2": ..., "b2": ..., ...}
+        Accepts many formats:
+        1. {"W1": ..., "b1": ..., "W2": ..., "b2": ...}
         2. {"W": [W1, W2, ...], "b": [b1, b2, ...]}
-        3. [(W1, b1), (W2, b2), ...]
-        4. [W1, b1, W2, b2, ...]
+        3. {"weights": [W1, W2, ...], "biases": [b1, b2, ...]}
+        4. {"layer1": {"W": ..., "b": ...}, "layer2": {"W": ..., "b": ...}}
+        5. {0: {"W": ..., "b": ...}, 1: {"W": ..., "b": ...}}
+        6. [(W1, b1), (W2, b2), ...]
+        7. [W1, b1, W2, b2, ...]
         """
 
-        # If loaded via np.load(..., allow_pickle=True), unwrap scalar object array
+        def to_array(x):
+            return np.array(x, dtype=float, copy=True)
+
+        def sort_key(k):
+            s = str(k)
+            digits = "".join(ch for ch in s if ch.isdigit())
+            return (0, int(digits)) if digits else (1, s)
+
+        # unwrap scalar object array from np.load(..., allow_pickle=True)
         if isinstance(weights, np.ndarray) and weights.shape == ():
             weights = weights.item()
 
         normalized = []
 
+        # ---------------- DICT FORMATS ----------------
         if isinstance(weights, dict):
-            # Format: {"W1":..., "b1":..., "W2":..., "b2":...}
+            keys = list(weights.keys())
+
+            # Case 1: flat dict with W1,b1,W2,b2,...
             if all(f"W{i}" in weights and f"b{i}" in weights for i in range(1, len(self.layers) + 1)):
                 for i in range(1, len(self.layers) + 1):
                     normalized.append((weights[f"W{i}"], weights[f"b{i}"]))
 
-            # Format: {"W":[...], "b":[...]}
+            # Case 2: dict with lists {"W":[...], "b":[...]}
             elif "W" in weights and "b" in weights:
-                if len(weights["W"]) != len(self.layers) or len(weights["b"]) != len(self.layers):
+                W_list = list(weights["W"])
+                b_list = list(weights["b"])
+                if len(W_list) != len(self.layers) or len(b_list) != len(self.layers):
                     raise ValueError("Weight dict lists must match number of layers")
-                normalized = list(zip(weights["W"], weights["b"]))
+                normalized = list(zip(W_list, b_list))
 
-            # Format: {"weights":[...], "biases":[...]}
+            # Case 3: dict with lists {"weights":[...], "biases":[...]}
             elif "weights" in weights and "biases" in weights:
-                if len(weights["weights"]) != len(self.layers) or len(weights["biases"]) != len(self.layers):
+                W_list = list(weights["weights"])
+                b_list = list(weights["biases"])
+                if len(W_list) != len(self.layers) or len(b_list) != len(self.layers):
                     raise ValueError("Weight dict lists must match number of layers")
-                normalized = list(zip(weights["weights"], weights["biases"]))
+                normalized = list(zip(W_list, b_list))
 
             else:
-                raise ValueError("Unsupported dictionary format for weights")
+                # Case 4/5: nested dict per layer
+                ordered_items = [weights[k] for k in sorted(keys, key=sort_key)]
 
+                ok_nested = True
+                temp = []
+                for item in ordered_items:
+                    if isinstance(item, dict):
+                        if "W" in item and "b" in item:
+                            temp.append((item["W"], item["b"]))
+                        elif "weights" in item and "bias" in item:
+                            temp.append((item["weights"], item["bias"]))
+                        elif "weights" in item and "biases" in item:
+                            temp.append((item["weights"], item["biases"]))
+                        else:
+                            ok_nested = False
+                            break
+                    elif isinstance(item, (list, tuple)) and len(item) == 2:
+                        temp.append((item[0], item[1]))
+                    else:
+                        ok_nested = False
+                        break
+
+                if ok_nested and len(temp) == len(self.layers):
+                    normalized = temp
+                else:
+                    raise ValueError("Unsupported dictionary format for weights")
+
+        # ---------------- LIST / TUPLE FORMATS ----------------
         else:
             weights = list(weights)
 
-            # Format: [W1, b1, W2, b2, ...]
+            # Case 6: flat list [W1, b1, W2, b2, ...]
             if len(weights) == 2 * len(self.layers):
                 normalized = [
                     (weights[i], weights[i + 1])
                     for i in range(0, len(weights), 2)
                 ]
 
-            # Format: [(W1,b1), (W2,b2), ...]
+            # Case 7: [(W1,b1), (W2,b2), ...]
             elif len(weights) == len(self.layers):
                 for item in weights:
                     if isinstance(item, dict):
                         if "W" in item and "b" in item:
                             normalized.append((item["W"], item["b"]))
+                        elif "weights" in item and "bias" in item:
+                            normalized.append((item["weights"], item["bias"]))
+                        elif "weights" in item and "biases" in item:
+                            normalized.append((item["weights"], item["biases"]))
                         else:
-                            raise ValueError("Each layer dict must contain 'W' and 'b'")
+                            raise ValueError("Unsupported per-layer dict format")
                     else:
                         W, b = item
                         normalized.append((W, b))
-
             else:
                 raise ValueError("Number of weight sets must match number of layers")
 
+        if len(normalized) != len(self.layers):
+            raise ValueError("Parsed weights do not match number of layers")
+
         for layer, (W, b) in zip(self.layers, normalized):
-            layer.W = np.array(W, dtype=float, copy=True)
-            layer.b = np.array(b, dtype=float, copy=True)
+            layer.W = to_array(W)
+            layer.b = to_array(b)
 
     def get_weights(self):
         """
