@@ -1,3 +1,4 @@
+from argparse import Namespace
 from .neural_layer import NeuralLayer
 
 
@@ -10,6 +11,17 @@ class NeuralNetwork:
                  activation="relu",
                  weight_init="random"):
 
+        # Handle case: NeuralNetwork(args) where args is argparse.Namespace
+        if isinstance(input_size, Namespace):
+            args = input_size
+
+            input_size = getattr(args, "input_size", 784)
+            hidden_sizes = getattr(args, "hidden_sizes", getattr(args, "hidden_size", None))
+            num_layers = getattr(args, "num_layers", None)
+            output_size = getattr(args, "output_size", 10)
+            activation = getattr(args, "activation", "relu")
+            weight_init = getattr(args, "weight_init", "random")
+
         self.layers = []
 
         # Normalize hidden_sizes
@@ -17,12 +29,20 @@ class NeuralNetwork:
             hidden_sizes = []
         elif isinstance(hidden_sizes, int):
             hidden_sizes = [hidden_sizes]
+        elif isinstance(hidden_sizes, str):
+            # Supports formats like "128,64,32"
+            hidden_sizes = [int(x.strip()) for x in hidden_sizes.split(",") if x.strip()]
         else:
             hidden_sizes = list(hidden_sizes)
 
-        # Infer num_layers if not given
+        # Infer num_layers if not provided
         if num_layers is None:
             num_layers = len(hidden_sizes)
+
+        # Ensure integer type
+        num_layers = int(num_layers)
+        input_size = int(input_size)
+        output_size = int(output_size)
 
         # Make hidden_sizes compatible with num_layers
         if num_layers == 0:
