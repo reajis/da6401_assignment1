@@ -4,12 +4,17 @@ Evaluate trained models on test sets
 """
 
 import argparse
+import os
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from ann.neural_network import NeuralNetwork
 from ann.objective_functions import cross_entropy, mean_squared_error
 from utils.data_loader import load_and_preprocess_data
+
+
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_MODEL_PATH = os.path.join(SRC_DIR, "best_model.npy")
 
 
 def parse_arguments():
@@ -21,7 +26,7 @@ def parse_arguments():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="best_model.npy",
+        default=DEFAULT_MODEL_PATH,
         help="Path to saved model weights"
     )
     parser.add_argument(
@@ -55,6 +60,12 @@ def parse_arguments():
         choices=["relu", "sigmoid", "tanh"]
     )
     parser.add_argument(
+        "--weight_init",
+        type=str,
+        default="xavier",
+        choices=["random", "xavier"]
+    )
+    parser.add_argument(
         "--loss",
         type=str,
         default="cross_entropy",
@@ -71,6 +82,9 @@ def normalize_hidden_sizes(hidden_size_list, num_layers):
     if num_layers == 0:
         return []
 
+    if isinstance(hidden_size_list, int):
+        return [hidden_size_list] * num_layers
+
     if len(hidden_size_list) == num_layers:
         return hidden_size_list
 
@@ -83,7 +97,7 @@ def normalize_hidden_sizes(hidden_size_list, num_layers):
     )
 
 
-def load_model(model_path, input_size, hidden_sizes, num_layers, output_size, activation):
+def load_model(model_path, input_size, hidden_sizes, num_layers, output_size, activation, weight_init):
     """
     Load trained model from disk by rebuilding the architecture and injecting weights.
     """
@@ -93,21 +107,11 @@ def load_model(model_path, input_size, hidden_sizes, num_layers, output_size, ac
         num_layers=num_layers,
         output_size=output_size,
         activation=activation,
-        weight_init="random"
+        weight_init=weight_init
     )
 
-    weights_list = np.load(model_path, allow_pickle=True)
-
-    if len(weights_list) != len(model.get_layers()):
-        raise ValueError(
-            f"Mismatch between saved weights ({len(weights_list)} layers) and "
-            f"constructed model ({len(model.get_layers())} layers). "
-            "Check num_layers / hidden_size / activation settings."
-        )
-
-    for layer, saved_params in zip(model.get_layers(), weights_list):
-        layer.W = saved_params["W"]
-        layer.b = saved_params["b"]
+    weights = np.load(model_path, allow_pickle=True).item()
+    model.set_weights(weights)
 
     return model
 
@@ -116,7 +120,7 @@ def evaluate_model(model, X_test, y_test, loss_type="cross_entropy"):
     """
     Evaluate model on test data and return required metrics.
     """
-    y_pred_probs = model.forward(X_test)
+    y_pred_probs, _ = model.forward(X_test)
 
     if loss_type == "cross_entropy":
         loss_val = cross_entropy(y_test, y_pred_probs)
@@ -153,14 +157,18 @@ def main():
         hidden_sizes=args.hidden_size,
         num_layers=args.num_layers,
         output_size=y_test.shape[1],
-        activation=args.activation
+        activation=args.activation,
+        weight_init=args.weight_init
     )
 
     results = evaluate_model(model, X_test, y_test, loss_type=args.loss)
 
     print("\nEvaluation Results:")
-    for metric in ["accuracy", "precision", "recall", "f1"]:
-        print(f"{metric.capitalize()}: {results[metric]:.4f}")
+    print(f"Loss: {results['loss']:.4f}")
+    print(f"Accuracy: {results['accuracy']:.4f}")
+    print(f"Precision: {results['precision']:.4f}")
+    print(f"Recall: {results['recall']:.4f}")
+    print(f"F1: {results['f1']:.4f}")
 
     return results
 

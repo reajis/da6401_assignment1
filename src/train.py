@@ -21,10 +21,14 @@ from ann.objective_functions import (
 from utils.data_loader import load_and_preprocess_data, get_batches
 
 
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_MODEL_PATH = os.path.join(SRC_DIR, "best_model.npy")
+DEFAULT_CONFIG_PATH = os.path.join(SRC_DIR, "best_config.json")
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Train a neural network")
 
-    # CLI args
     parser.add_argument(
         "-d", "--dataset",
         type=str,
@@ -87,7 +91,6 @@ def parse_arguments():
         choices=["random", "xavier"]
     )
 
-    # Extra convenience args
     parser.add_argument(
         "--wandb_project",
         type=str,
@@ -96,41 +99,31 @@ def parse_arguments():
     parser.add_argument(
         "--model_save_path",
         type=str,
-        default="./src/best_model.npy"
+        default=DEFAULT_MODEL_PATH
     )
     parser.add_argument(
         "--config_save_path",
         type=str,
-        default="./src/best_config.json"
+        default=DEFAULT_CONFIG_PATH
     )
 
     return parser.parse_args()
 
 
 def calculate_accuracy(y_true, y_pred):
-    """
-    Computes classification accuracy from one-hot labels and predicted probabilities.
-    """
     true_labels = np.argmax(y_true, axis=1)
     pred_labels = np.argmax(y_pred, axis=1)
     return np.mean(true_labels == pred_labels)
 
 
 def calculate_macro_f1(y_true, y_pred):
-    """
-    Computes macro F1-score from one-hot labels and predicted probabilities.
-    """
     true_labels = np.argmax(y_true, axis=1)
     pred_labels = np.argmax(y_pred, axis=1)
     return f1_score(true_labels, pred_labels, average="macro")
 
 
 def evaluate_split(model, X, y, loss_fn):
-    """
-    Runs forward pass on a full split and returns loss/accuracy/f1.
-    """
-    y_pred = model.forward(X)
-
+    y_pred, _ = model.forward(X)
     metrics = {
         "loss": loss_fn(y, y_pred),
         "accuracy": calculate_accuracy(y, y_pred),
@@ -140,20 +133,17 @@ def evaluate_split(model, X, y, loss_fn):
 
 
 def ensure_parent_dir(filepath):
-    """
-    Creates parent directory for a file path if needed.
-    """
     parent = os.path.dirname(filepath)
     if parent:
         os.makedirs(parent, exist_ok=True)
 
 
 def normalize_hidden_sizes(hidden_size_list, num_layers):
-    """
-    Ensures hidden_size list matches num_layers.
-    """
     if num_layers == 0:
         return []
+
+    if isinstance(hidden_size_list, int):
+        return [hidden_size_list] * num_layers
 
     if len(hidden_size_list) == num_layers:
         return hidden_size_list
@@ -170,27 +160,21 @@ def normalize_hidden_sizes(hidden_size_list, num_layers):
 def main():
     args = parse_arguments()
 
-    # Ensure paths are writable
     ensure_parent_dir(args.model_save_path)
     ensure_parent_dir(args.config_save_path)
 
-    # Normalize hidden sizes before logging config
     args.hidden_size = normalize_hidden_sizes(args.hidden_size, args.num_layers)
 
-    # Initialize W&B
     wandb_mode = os.environ.get("WANDB_MODE", "disabled")
-
     wandb.init(
         project=args.wandb_project,
         config=vars(args),
         name=f"{args.optimizer}_lr{args.learning_rate}_{args.activation}",
         mode=wandb_mode
-)
+    )
 
-    # Skip saving model/config files during sweep runs
     save_outputs = not (wandb.run is not None and wandb.run.sweep_id is not None)
 
-    # Load Data
     print(f"Loading {args.dataset} dataset")
     (X_train, y_train), (X_val, y_val), (X_test, y_test) = load_and_preprocess_data(
         dataset_name=args.dataset
@@ -199,7 +183,6 @@ def main():
     input_size = X_train.shape[1]
     output_size = y_train.shape[1]
 
-    # Build model
     model = NeuralNetwork(
         input_size=input_size,
         hidden_sizes=args.hidden_size,
@@ -209,7 +192,6 @@ def main():
         weight_init=args.weight_init
     )
 
-    # Optimizer
     optimizer = Optimizer(
         layers=model.get_layers(),
         optimizer_type=args.optimizer,
@@ -217,7 +199,6 @@ def main():
         weight_decay=args.weight_decay
     )
 
-    # Loss function
     if args.loss == "cross_entropy":
         loss_fn = cross_entropy
         loss_derivative_fn = cross_entropy_derivative
@@ -225,7 +206,6 @@ def main():
         loss_fn = mean_squared_error
         loss_derivative_fn = mean_squared_error_derivative
 
-    # Track best model by TEST macro F1
     best_test_f1 = -1.0
     best_epoch = -1
     best_val_accuracy = -1.0
@@ -238,10 +218,8 @@ def main():
         num_batches = 0
 
         for X_batch, y_batch in get_batches(X_train, y_train, args.batch_size):
-            # Forward
-            y_pred = model.forward(X_batch)
+            y_pred, _ = model.forward(X_batch)
 
-            # Batch metrics
             batch_loss = loss_fn(y_batch, y_pred)
             batch_acc = calculate_accuracy(y_batch, y_pred)
 
@@ -249,18 +227,14 @@ def main():
             train_acc_total += batch_acc
             num_batches += 1
 
-            # Backward
             dA = loss_derivative_fn(y_batch, y_pred)
             model.backward(dA)
 
-            # Update
             optimizer.step()
 
-        # Epoch train metrics
         avg_train_loss = train_loss_total / num_batches
         avg_train_acc = train_acc_total / num_batches
 
-        # Full-split evaluation
         val_metrics = evaluate_split(model, X_val, y_val, loss_fn)
         test_metrics = evaluate_split(model, X_test, y_test, loss_fn)
 
@@ -277,7 +251,6 @@ def main():
             f"Test F1: {test_metrics['f1']:.4f}"
         )
 
-        # Log to W&B
         wandb.log({
             "epoch": epoch + 1,
             "train_loss": avg_train_loss,
@@ -291,7 +264,6 @@ def main():
             "test_f1": test_metrics["f1"]
         })
 
-        # Save best model based on TEST macro F1
         if test_metrics["f1"] > best_test_f1:
             best_test_f1 = test_metrics["f1"]
             best_epoch = epoch + 1

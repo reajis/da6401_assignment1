@@ -14,11 +14,11 @@
     "activation": "relu",
     "weight_init": "xavier",
     "wandb_project": "da6401_assignment_1",
-    "model_save_path": "./src/best_model.npy",
-    "config_save_path": "./src/best_config.json",
-    "best_epoch": 10,
-    "best_test_f1": 0.9778989402189092,
-    "best_test_accuracy": 0.9781,
-    "best_val_f1_at_save": 0.9763976367254417,
-    "best_val_accuracy_at_save": 0.9765
+    "model_save_path": "/mnt/c/Users/reame/OneDrive/da6401/da6401_assignment_1-main/src/best_model.npy",
+    "config_save_path": "/mnt/c/Users/reame/OneDrive/da6401/da6401_assignment_1-main/src/best_config.json",
+    "best_epoch": 7,
+    "best_test_f1": 0.9777363654465656,
+    "best_test_accuracy": 0.9778,
+    "best_val_f1_at_save": 0.9731763815543246,
+    "best_val_accuracy_at_save": 0.9733333333333334
 }
