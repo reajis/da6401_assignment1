@@ -11,10 +11,8 @@ class NeuralNetwork:
                  activation="relu",
                  weight_init="random"):
 
-        # Handle case: NeuralNetwork(args) where args is argparse.Namespace
         if isinstance(input_size, Namespace):
             args = input_size
-
             input_size = getattr(args, "input_size", 784)
             hidden_sizes = getattr(args, "hidden_sizes", getattr(args, "hidden_size", None))
             num_layers = getattr(args, "num_layers", None)
@@ -24,27 +22,22 @@ class NeuralNetwork:
 
         self.layers = []
 
-        # Normalize hidden_sizes
         if hidden_sizes is None:
             hidden_sizes = []
         elif isinstance(hidden_sizes, int):
             hidden_sizes = [hidden_sizes]
         elif isinstance(hidden_sizes, str):
-            # Supports formats like "128,64,32"
             hidden_sizes = [int(x.strip()) for x in hidden_sizes.split(",") if x.strip()]
         else:
             hidden_sizes = list(hidden_sizes)
 
-        # Infer num_layers if not provided
         if num_layers is None:
             num_layers = len(hidden_sizes)
 
-        # Ensure integer type
         num_layers = int(num_layers)
         input_size = int(input_size)
         output_size = int(output_size)
 
-        # Make hidden_sizes compatible with num_layers
         if num_layers == 0:
             hidden_sizes = []
         else:
@@ -62,7 +55,6 @@ class NeuralNetwork:
         self.activation = activation
         self.weight_init = weight_init
 
-        # No hidden layers
         if num_layers == 0:
             self.layers.append(
                 NeuralLayer(
@@ -73,7 +65,6 @@ class NeuralNetwork:
                 )
             )
         else:
-            # First hidden layer
             self.layers.append(
                 NeuralLayer(
                     input_size=input_size,
@@ -83,7 +74,6 @@ class NeuralNetwork:
                 )
             )
 
-            # Remaining hidden layers
             for i in range(1, num_layers):
                 self.layers.append(
                     NeuralLayer(
@@ -94,7 +84,6 @@ class NeuralNetwork:
                     )
                 )
 
-            # Output layer
             self.layers.append(
                 NeuralLayer(
                     input_size=hidden_sizes[-1],
@@ -118,3 +107,36 @@ class NeuralNetwork:
 
     def get_layers(self):
         return self.layers
+
+    def set_weights(self, weights):
+        """
+        Set weights and biases of all layers.
+
+        Expected format:
+        weights = [
+            (W1, b1),
+            (W2, b2),
+            ...
+        ]
+        """
+        if len(weights) != len(self.layers):
+            raise ValueError("Number of weight sets must match number of layers")
+
+        for layer, params in zip(self.layers, weights):
+            if len(params) != 2:
+                raise ValueError("Each layer weight entry must be a tuple/list: (W, b)")
+
+            W, b = params
+            layer.W = W.copy()
+            layer.b = b.copy()
+
+    def get_weights(self):
+        """
+        Return weights and biases of all layers in the format:
+        [
+            (W1, b1),
+            (W2, b2),
+            ...
+        ]
+        """
+        return [(layer.W.copy(), layer.b.copy()) for layer in self.layers]
