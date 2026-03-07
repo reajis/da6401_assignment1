@@ -112,37 +112,68 @@ class NeuralNetwork:
 
     def set_weights(self, weights):
         """
-        Supports all of these formats:
-        1. [(W1, b1), (W2, b2), ...]
-        2. [W1, b1, W2, b2, ...]
-        3. [{"W": W1, "b": b1}, {"W": W2, "b": b2}, ...]
+        Supports:
+        1. {"W1": ..., "b1": ..., "W2": ..., "b2": ..., ...}
+        2. {"W": [W1, W2, ...], "b": [b1, b2, ...]}
+        3. [(W1, b1), (W2, b2), ...]
+        4. [W1, b1, W2, b2, ...]
         """
-        weights = list(weights)
-        normalized = []
-    
-        # Case 1: flat list [W1, b1, W2, b2, ...]
-        if len(weights) == 2 * len(self.layers):
-            normalized = [
-                (weights[i], weights[i + 1])
-                for i in range(0, len(weights), 2)
-            ]
 
-        # Case 2/3: one entry per layer
-        elif len(weights) == len(self.layers):
-            for item in weights:
-                if isinstance(item, dict):
-                    W = item["W"]
-                    b = item["b"]
-                else:
-                    W, b = item
-                normalized.append((W, b))
+        # If loaded via np.load(..., allow_pickle=True), unwrap scalar object array
+        if isinstance(weights, np.ndarray) and weights.shape == ():
+            weights = weights.item()
+
+        normalized = []
+
+        if isinstance(weights, dict):
+            # Format: {"W1":..., "b1":..., "W2":..., "b2":...}
+            if all(f"W{i}" in weights and f"b{i}" in weights for i in range(1, len(self.layers) + 1)):
+                for i in range(1, len(self.layers) + 1):
+                    normalized.append((weights[f"W{i}"], weights[f"b{i}"]))
+
+            # Format: {"W":[...], "b":[...]}
+            elif "W" in weights and "b" in weights:
+                if len(weights["W"]) != len(self.layers) or len(weights["b"]) != len(self.layers):
+                    raise ValueError("Weight dict lists must match number of layers")
+                normalized = list(zip(weights["W"], weights["b"]))
+
+            # Format: {"weights":[...], "biases":[...]}
+            elif "weights" in weights and "biases" in weights:
+                if len(weights["weights"]) != len(self.layers) or len(weights["biases"]) != len(self.layers):
+                    raise ValueError("Weight dict lists must match number of layers")
+                normalized = list(zip(weights["weights"], weights["biases"]))
+
+            else:
+                raise ValueError("Unsupported dictionary format for weights")
 
         else:
-            raise ValueError("Number of weight sets must match number of layers")
+            weights = list(weights)
+
+            # Format: [W1, b1, W2, b2, ...]
+            if len(weights) == 2 * len(self.layers):
+                normalized = [
+                    (weights[i], weights[i + 1])
+                    for i in range(0, len(weights), 2)
+                ]
+
+            # Format: [(W1,b1), (W2,b2), ...]
+            elif len(weights) == len(self.layers):
+                for item in weights:
+                    if isinstance(item, dict):
+                        if "W" in item and "b" in item:
+                            normalized.append((item["W"], item["b"]))
+                        else:
+                            raise ValueError("Each layer dict must contain 'W' and 'b'")
+                    else:
+                        W, b = item
+                        normalized.append((W, b))
+
+            else:
+                raise ValueError("Number of weight sets must match number of layers")
 
         for layer, (W, b) in zip(self.layers, normalized):
-            layer.W = np.array(W, copy=True)
-            layer.b = np.array(b, copy=True)
+            layer.W = np.array(W, dtype=float, copy=True)
+            layer.b = np.array(b, dtype=float, copy=True)
 
     def get_weights(self):
         """

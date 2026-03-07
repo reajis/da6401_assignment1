@@ -24,3 +24,7 @@ Good luck with your implementation!
 
 # da6401_assignment1
 
+github link https://github.com/reajis/da6401_assignment1/tree/main
+
+wandb im not able to make report public (could be because i didnt use student acc mail)
+i have added ta to my team and he can view it directly 

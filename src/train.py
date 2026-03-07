@@ -297,10 +297,11 @@ def main():
             best_epoch = epoch + 1
 
             if save_outputs:
-                model_weights = [
-                    {"W": layer.W.copy(), "b": layer.b.copy()}
-                    for layer in model.get_layers()
-                ]
+                model_weights = {}
+                for i, layer in enumerate(model.get_layers(), start=1):
+                    model_weights[f"W{i}"] = layer.W.copy()
+                    model_weights[f"b{i}"] = layer.b.copy()
+
                 np.save(args.model_save_path, model_weights, allow_pickle=True)
 
                 best_config = vars(args).copy()
