@@ -5,6 +5,7 @@ from ann.activations import sigmoid_derivative, tanh_derivative, relu_derivative
 
 class DenseLayer:
     def __init__(self, input_dim, output_dim, activation=None, weight_init="xavier"):
+        # Initialize weights and bias
         if weight_init == "xavier":
             limit = np.sqrt(6.0 / (input_dim + output_dim))
             self.W = np.random.uniform(-limit, limit, (input_dim, output_dim))

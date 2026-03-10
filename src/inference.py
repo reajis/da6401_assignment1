@@ -1,15 +1,24 @@
 import argparse
 import json
 import os
-import numpy as np
+
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
+import numpy as np
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
 
 from ann.neural_network import NeuralNetwork
 from utils.data_loader import load_and_preprocess_data
 
 
 def parse_arguments():
+    # Arguments for inference
     parser = argparse.ArgumentParser(description="Run inference with a saved model")
     parser.add_argument("--dataset", type=str, default="mnist", choices=["mnist", "fashion_mnist"])
     parser.add_argument("--model_path", type=str, default="src/best_model.npy")
@@ -21,6 +30,7 @@ def parse_arguments():
 
 
 def resolve_hidden_layers(config):
+    # Build hidden layer list from saved config
     hidden_size = config["hidden_size"]
     if isinstance(hidden_size, int):
         return [hidden_size] * config["num_layers"]
@@ -28,7 +38,7 @@ def resolve_hidden_layers(config):
 
 
 def load_model(model_path, config_path):
-    """Load a trained NeuralNetwork from saved weights and config."""
+    # Load model config and weights
     with open(config_path, "r") as f:
         config = json.load(f)
 
@@ -46,8 +56,8 @@ def load_model(model_path, config_path):
         weight_decay=config["weight_decay"],
     )
 
-    weights = np.load(model_path, allow_pickle=True).item()
-    model.set_weights(weights)
+    saved_weights = np.load(model_path, allow_pickle=True).item()
+    model.set_weights(saved_weights)
     return model
 
 
@@ -56,19 +66,19 @@ def main():
     X_train, y_train, X_val, y_val, X_test, y_test = load_and_preprocess_data(args.dataset)
 
     if args.split == "train":
-        X, y = X_train, y_train
+        X_data, y_data = X_train, y_train
     elif args.split == "val":
-        X, y = X_val, y_val
+        X_data, y_data = X_val, y_val
     else:
-        X, y = X_test, y_test
+        X_data, y_data = X_test, y_test
 
     model = load_model(args.model_path, args.config_path)
-    preds = model.predict(X)
+    predictions = model.predict(X_data)
 
-    accuracy = accuracy_score(y, preds)
-    precision = precision_score(y, preds, average="macro", zero_division=0)
-    recall = recall_score(y, preds, average="macro", zero_division=0)
-    f1 = f1_score(y, preds, average="macro", zero_division=0)
+    accuracy = accuracy_score(y_data, predictions)
+    precision = precision_score(y_data, predictions, average="macro", zero_division=0)
+    recall = recall_score(y_data, predictions, average="macro", zero_division=0)
+    f1 = f1_score(y_data, predictions, average="macro", zero_division=0)
 
     print("Accuracy:", accuracy)
     print("Precision:", precision)
@@ -77,7 +87,7 @@ def main():
 
     if args.save_cm_path:
         os.makedirs(os.path.dirname(args.save_cm_path) or ".", exist_ok=True)
-        cm = confusion_matrix(y, preds)
+        cm = confusion_matrix(y_data, predictions)
         disp = ConfusionMatrixDisplay(confusion_matrix=cm)
         fig, ax = plt.subplots(figsize=(8, 8))
         disp.plot(ax=ax, colorbar=False)
@@ -86,16 +96,19 @@ def main():
         plt.close()
 
     if args.save_failures_path:
-        wrong = np.where(preds != y)[0][:16]
-        if len(wrong) > 0:
+        wrong_indices = np.where(predictions != y_data)[0][:16]
+        if len(wrong_indices) > 0:
             os.makedirs(os.path.dirname(args.save_failures_path) or ".", exist_ok=True)
             fig, axes = plt.subplots(4, 4, figsize=(8, 8))
-            for ax, idx in zip(axes.flat, wrong):
-                ax.imshow(X[idx].reshape(28, 28), cmap="gray")
-                ax.set_title(f"t:{y[idx]} p:{preds[idx]}")
+
+            for ax, idx in zip(axes.flat, wrong_indices):
+                ax.imshow(X_data[idx].reshape(28, 28), cmap="gray")
+                ax.set_title(f"t:{y_data[idx]} p:{predictions[idx]}")
                 ax.axis("off")
-            for ax in axes.flat[len(wrong):]:
+
+            for ax in axes.flat[len(wrong_indices):]:
                 ax.axis("off")
+
             plt.tight_layout()
             plt.savefig(args.save_failures_path)
             plt.close()

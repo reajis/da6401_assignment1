@@ -20,7 +20,7 @@ class NeuralNetwork:
         optimizer_name="adam",
         weight_decay=0.0,
     ):
-        
+        # Read settings from CLI args if provided
         if cli_args is not None:
             input_dim = 784
             output_dim = 10
@@ -50,11 +50,16 @@ class NeuralNetwork:
             hidden_layers = [64]
 
         self.layers = []
-        dims = [input_dim] + hidden_layers + [output_dim]
+        layer_dims = [input_dim] + hidden_layers + [output_dim]
 
-        for i in range(len(dims) - 1):
-            act = activation if i < len(dims) - 2 else None
-            layer = DenseLayer(dims[i], dims[i + 1], activation=act, weight_init=weight_init)
+        for idx in range(len(layer_dims) - 1):
+            layer_activation = activation if idx < len(layer_dims) - 2 else None
+            layer = DenseLayer(
+                layer_dims[idx],
+                layer_dims[idx + 1],
+                activation=layer_activation,
+                weight_init=weight_init,
+            )
             self.layers.append(layer)
 
         self.loss = loss
@@ -66,12 +71,12 @@ class NeuralNetwork:
         self.last_hidden_output = None
 
     def forward(self, X):
-        out = X
-        for i, layer in enumerate(self.layers):
-            out = layer.forward(out)
-            if i == 0:
-                self.last_hidden_output = out.copy()
-        return out
+        layer_output = X
+        for idx, layer in enumerate(self.layers):
+            layer_output = layer.forward(layer_output)
+            if idx == 0:
+                self.last_hidden_output = layer_output.copy()
+        return layer_output
 
     def compute_loss(self, logits, y_true):
         if self.loss == "cross_entropy":
@@ -105,10 +110,10 @@ class NeuralNetwork:
 
     def train_batch(self, X, y):
         logits = self.forward(X)
-        loss = self.compute_loss(logits, y)
+        loss_value = self.compute_loss(logits, y)
         self.backward(y, logits)
         self.update_weights()
-        return loss
+        return loss_value
 
     def predict_proba(self, X):
         logits = self.forward(X)
@@ -120,22 +125,22 @@ class NeuralNetwork:
 
     def evaluate(self, X, y):
         logits = self.forward(X)
-        loss = self.compute_loss(logits, y)
+        loss_value = self.compute_loss(logits, y)
         preds = np.argmax(softmax(logits), axis=1)
         accuracy = np.mean(preds == y)
-        return loss, accuracy, preds
+        return loss_value, accuracy, preds
 
     def get_weights(self):
-        d = {}
-        for i, layer in enumerate(self.layers):
-            d[f"W{i}"] = layer.W.copy()
-            d[f"b{i}"] = layer.b.copy()
-        return d
+        weight_dict = {}
+        for idx, layer in enumerate(self.layers):
+            weight_dict[f"W{idx}"] = layer.W.copy()
+            weight_dict[f"b{idx}"] = layer.b.copy()
+        return weight_dict
 
     def set_weights(self, weight_dict):
-        for i, layer in enumerate(self.layers):
-            w_key = f"W{i}"
-            b_key = f"b{i}"
+        for idx, layer in enumerate(self.layers):
+            w_key = f"W{idx}"
+            b_key = f"b{idx}"
             if w_key in weight_dict:
                 layer.W = weight_dict[w_key].copy()
             if b_key in weight_dict:

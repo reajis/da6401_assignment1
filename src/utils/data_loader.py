@@ -1,16 +1,18 @@
 import os
 import gzip
 import urllib.request
+
 import numpy as np
 from sklearn.model_selection import train_test_split
 
 
 def load_and_preprocess_data(dataset_name):
+    # Load dataset and prepare train/val/test splits
     if dataset_name == "mnist":
         if not os.path.exists("mnist.npz"):
             urllib.request.urlretrieve(
                 "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz",
-                "mnist.npz"
+                "mnist.npz",
             )
 
         data = np.load("mnist.npz")
@@ -24,25 +26,25 @@ def load_and_preprocess_data(dataset_name):
         if not os.path.exists("train-images-idx3-ubyte.gz"):
             urllib.request.urlretrieve(
                 "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/train-images-idx3-ubyte.gz",
-                "train-images-idx3-ubyte.gz"
+                "train-images-idx3-ubyte.gz",
             )
 
         if not os.path.exists("train-labels-idx1-ubyte.gz"):
             urllib.request.urlretrieve(
                 "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/train-labels-idx1-ubyte.gz",
-                "train-labels-idx1-ubyte.gz"
+                "train-labels-idx1-ubyte.gz",
             )
 
         if not os.path.exists("t10k-images-idx3-ubyte.gz"):
             urllib.request.urlretrieve(
                 "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/t10k-images-idx3-ubyte.gz",
-                "t10k-images-idx3-ubyte.gz"
+                "t10k-images-idx3-ubyte.gz",
             )
 
         if not os.path.exists("t10k-labels-idx1-ubyte.gz"):
             urllib.request.urlretrieve(
                 "http://fashion-mnist.s3-website.eu-central-1.amazonaws.com/t10k-labels-idx1-ubyte.gz",
-                "t10k-labels-idx1-ubyte.gz"
+                "t10k-labels-idx1-ubyte.gz",
             )
 
         with gzip.open("train-images-idx3-ubyte.gz", "rb") as f:
@@ -65,18 +67,19 @@ def load_and_preprocess_data(dataset_name):
         y_train_full,
         test_size=0.1,
         random_state=42,
-        stratify=y_train_full
+        stratify=y_train_full,
     )
 
     return X_train, y_train, X_val, y_val, X_test, y_test
 
 
 def get_batches(X, y, batch_size, shuffle=True):
+    # Yield mini-batches
     indices = np.arange(len(X))
 
     if shuffle:
         np.random.shuffle(indices)
 
-    for start in range(0, len(X), batch_size):
-        batch_indices = indices[start:start + batch_size]
+    for start_idx in range(0, len(X), batch_size):
+        batch_indices = indices[start_idx:start_idx + batch_size]
         yield X[batch_indices], y[batch_indices]
