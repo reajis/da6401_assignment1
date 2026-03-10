@@ -18,7 +18,6 @@ from utils.data_loader import load_and_preprocess_data
 
 
 def parse_arguments():
-    # Arguments for inference
     parser = argparse.ArgumentParser(description="Run inference with a saved model")
     parser.add_argument("--dataset", type=str, default="mnist", choices=["mnist", "fashion_mnist"])
     parser.add_argument("--model_path", type=str, default="src/best_model.npy")
@@ -30,15 +29,23 @@ def parse_arguments():
 
 
 def resolve_hidden_layers(config):
-    # Build hidden layer list from saved config
     hidden_size = config["hidden_size"]
+    num_layers = int(config["num_layers"])
+
     if isinstance(hidden_size, int):
-        return [hidden_size] * config["num_layers"]
-    return list(hidden_size)
+        return [hidden_size] * num_layers
+
+    if isinstance(hidden_size, list):
+        if len(hidden_size) == num_layers:
+            return hidden_size
+        if len(hidden_size) == 1:
+            return hidden_size * num_layers
+        raise ValueError("hidden_size list length must match num_layers")
+
+    raise ValueError("hidden_size must be int or list")
 
 
 def load_model(model_path, config_path):
-    # Load model config and weights
     with open(config_path, "r") as f:
         config = json.load(f)
 
@@ -63,6 +70,7 @@ def load_model(model_path, config_path):
 
 def main():
     args = parse_arguments()
+
     X_train, y_train, X_val, y_val, X_test, y_test = load_and_preprocess_data(args.dataset)
 
     if args.split == "train":
@@ -73,7 +81,12 @@ def main():
         X_data, y_data = X_test, y_test
 
     model = load_model(args.model_path, args.config_path)
-    predictions = model.predict(X_data)
+
+    if hasattr(model, "predict"):
+        predictions = model.predict(X_data)
+    else:
+        y_pred, _ = model.forward(X_data)
+        predictions = np.argmax(y_pred, axis=1)
 
     accuracy = accuracy_score(y_data, predictions)
     precision = precision_score(y_data, predictions, average="macro", zero_division=0)
