@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 
 from ann.neural_network import NeuralNetwork
 from ann.objective_functions import cross_entropy, mean_squared_error
-from utils.data_loader import load_and_preprocess_data
+from utils.r_data_loader import load_and_preprocess_data
 
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))

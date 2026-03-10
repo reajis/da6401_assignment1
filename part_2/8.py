@@ -13,7 +13,7 @@ if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
 from ann.neural_network import NeuralNetwork
-from utils.data_loader import load_and_preprocess_data
+from utils.r_data_loader import load_and_preprocess_data
 
 
 def normalize_hidden_sizes(hidden_size_list, num_layers):

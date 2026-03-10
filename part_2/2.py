@@ -19,7 +19,7 @@ from ann.objective_functions import (
     cross_entropy,
     cross_entropy_derivative,
 )
-from utils.data_loader import load_and_preprocess_data, get_batches
+from utils.r_data_loader import load_and_preprocess_data, get_batches
 
 
 def calculate_accuracy(y_true, y_pred):
