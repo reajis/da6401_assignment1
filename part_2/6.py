@@ -18,7 +18,7 @@ from ann.objective_functions import (
     cross_entropy,
     cross_entropy_derivative,
 )
-from utils.r_data_loader import load_and_preprocess_data, get_batches
+from utils.rdata_loader import load_and_preprocess_data, get_batches
 
 
 def set_seed(seed=42):

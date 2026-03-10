@@ -13,7 +13,7 @@ if SRC_DIR not in sys.path:
 from ann.neural_network import NeuralNetwork
 from ann.optimizers import Optimizer
 from ann.objective_functions import cross_entropy_derivative
-from utils.r_data_loader import load_and_preprocess_data, get_batches
+from utils.data_loader import load_and_preprocess_data, get_batches
 
 
 def set_seed(seed=42):
