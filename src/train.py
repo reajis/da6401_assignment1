@@ -10,9 +10,9 @@ import numpy as np
 import wandb
 from sklearn.metrics import f1_score
 
-from ann.r_neural_network import NeuralNetwork
+from ann.neural_network import NeuralNetwork
 from ann.optimizers import Optimizer
-from ann.r_objective_functions import (
+from ann.objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,
     cross_entropy,
