@@ -1,125 +1,96 @@
-"""
-Optimization Algorithms
-Implements: SGD, Momentum, Adam, Nadam, etc.
-"""
+
 import numpy as np
 
-class Optimizer:
-    def __init__(
-        self,
-        layers,
-        optimizer_type="sgd",
-        lr=0.01,
-        weight_decay=0.0,
-        beta1=0.9,
-        beta2=0.999,
-        epsilon=1e-8
-    ):
-        self.layers = layers
-        self.optimizer_type = optimizer_type.lower()
-        self.lr = lr
-        self.weight_decay = weight_decay
 
+class Optimizer:
+    def __init__(self, name="sgd", learning_rate=0.001, momentum=0.9, beta=0.9, beta1=0.9, beta2=0.999, epsilon=1e-8):
+        self.name = name
+        self.learning_rate = learning_rate
+        self.momentum = momentum
+        self.beta = beta
         self.beta1 = beta1
         self.beta2 = beta2
         self.epsilon = epsilon
-
         self.t = 0
+        self.v_W = []
+        self.v_b = []
+        self.m_W = []
+        self.m_b = []
 
-        # first moment / velocity terms
-        self.v_W = {id(layer): np.zeros_like(layer.W) for layer in layers}
-        self.v_b = {id(layer): np.zeros_like(layer.b) for layer in layers}
+    def setup(self, layers):
+        self.v_W = [np.zeros_like(layer.W) for layer in layers]
+        self.v_b = [np.zeros_like(layer.b) for layer in layers]
+        self.m_W = [np.zeros_like(layer.W) for layer in layers]
+        self.m_b = [np.zeros_like(layer.b) for layer in layers]
 
-        # second moment terms
-        self.m_W = {id(layer): np.zeros_like(layer.W) for layer in layers}
-        self.m_b = {id(layer): np.zeros_like(layer.b) for layer in layers}
+    def _check(self, layers):
+        if len(self.v_W) != len(layers):
+            self.setup(layers)
 
-    def step(self):
+    def step(self, layers):
+        self._check(layers)
         self.t += 1
 
-        for layer in self.layers:
-            if getattr(layer, "W", None) is None:
-                continue
-            if layer.grad_W is None or layer.grad_b is None:
-                continue
+        if self.name == "sgd":
+            for layer in layers:
+                layer.W -= self.learning_rate * layer.grad_W
+                layer.b -= self.learning_rate * layer.grad_b
 
-            idx = id(layer)
+        elif self.name == "momentum":
+            for i, layer in enumerate(layers):
+                self.v_W[i] = self.momentum * self.v_W[i] - self.learning_rate * layer.grad_W
+                self.v_b[i] = self.momentum * self.v_b[i] - self.learning_rate * layer.grad_b
+                layer.W += self.v_W[i]
+                layer.b += self.v_b[i]
 
-            grad_W = layer.grad_W.copy()
-            grad_b = layer.grad_b.copy()
+        elif self.name == "nag":
+            for i, layer in enumerate(layers):
+                prev_v_W = self.v_W[i].copy()
+                prev_v_b = self.v_b[i].copy()
+                self.v_W[i] = self.momentum * self.v_W[i] - self.learning_rate * layer.grad_W
+                self.v_b[i] = self.momentum * self.v_b[i] - self.learning_rate * layer.grad_b
+                layer.W += -self.momentum * prev_v_W + (1 + self.momentum) * self.v_W[i]
+                layer.b += -self.momentum * prev_v_b + (1 + self.momentum) * self.v_b[i]
 
-            # L2 weight decay on weights only
-            if self.weight_decay > 0.0:
-                grad_W += self.weight_decay * layer.W
+        elif self.name == "rmsprop":
+            for i, layer in enumerate(layers):
+                self.v_W[i] = self.beta * self.v_W[i] + (1.0 - self.beta) * (layer.grad_W ** 2)
+                self.v_b[i] = self.beta * self.v_b[i] + (1.0 - self.beta) * (layer.grad_b ** 2)
+                layer.W -= self.learning_rate * layer.grad_W / (np.sqrt(self.v_W[i]) + self.epsilon)
+                layer.b -= self.learning_rate * layer.grad_b / (np.sqrt(self.v_b[i]) + self.epsilon)
 
-            # SGD
-            if self.optimizer_type == "sgd":
-                layer.W -= self.lr * grad_W
-                layer.b -= self.lr * grad_b
+        elif self.name == "adam":
+            for i, layer in enumerate(layers):
+                self.m_W[i] = self.beta1 * self.m_W[i] + (1.0 - self.beta1) * layer.grad_W
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1.0 - self.beta1) * layer.grad_b
+                self.v_W[i] = self.beta2 * self.v_W[i] + (1.0 - self.beta2) * (layer.grad_W ** 2)
+                self.v_b[i] = self.beta2 * self.v_b[i] + (1.0 - self.beta2) * (layer.grad_b ** 2)
 
-            # Momentum
-            elif self.optimizer_type == "momentum":
-                self.v_W[idx] = self.beta1 * self.v_W[idx] + grad_W
-                self.v_b[idx] = self.beta1 * self.v_b[idx] + grad_b
+                m_W_hat = self.m_W[i] / (1.0 - self.beta1 ** self.t)
+                m_b_hat = self.m_b[i] / (1.0 - self.beta1 ** self.t)
+                v_W_hat = self.v_W[i] / (1.0 - self.beta2 ** self.t)
+                v_b_hat = self.v_b[i] / (1.0 - self.beta2 ** self.t)
 
-                layer.W -= self.lr * self.v_W[idx]
-                layer.b -= self.lr * self.v_b[idx]
+                layer.W -= self.learning_rate * m_W_hat / (np.sqrt(v_W_hat) + self.epsilon)
+                layer.b -= self.learning_rate * m_b_hat / (np.sqrt(v_b_hat) + self.epsilon)
 
-            # NAG
-            elif self.optimizer_type == "nag":
-                vW_prev = self.v_W[idx].copy()
-                vB_prev = self.v_b[idx].copy()
+        elif self.name == "nadam":
+            for i, layer in enumerate(layers):
+                self.m_W[i] = self.beta1 * self.m_W[i] + (1.0 - self.beta1) * layer.grad_W
+                self.m_b[i] = self.beta1 * self.m_b[i] + (1.0 - self.beta1) * layer.grad_b
+                self.v_W[i] = self.beta2 * self.v_W[i] + (1.0 - self.beta2) * (layer.grad_W ** 2)
+                self.v_b[i] = self.beta2 * self.v_b[i] + (1.0 - self.beta2) * (layer.grad_b ** 2)
 
-                self.v_W[idx] = self.beta1 * self.v_W[idx] + grad_W
-                self.v_b[idx] = self.beta1 * self.v_b[idx] + grad_b
+                m_W_hat = self.m_W[i] / (1.0 - self.beta1 ** self.t)
+                m_b_hat = self.m_b[i] / (1.0 - self.beta1 ** self.t)
+                v_W_hat = self.v_W[i] / (1.0 - self.beta2 ** self.t)
+                v_b_hat = self.v_b[i] / (1.0 - self.beta2 ** self.t)
 
-                layer.W -= self.lr * (grad_W + self.beta1 * vW_prev)
-                layer.b -= self.lr * (grad_b + self.beta1 * vB_prev)
+                nesterov_W = self.beta1 * m_W_hat + ((1.0 - self.beta1) * layer.grad_W) / (1.0 - self.beta1 ** self.t)
+                nesterov_b = self.beta1 * m_b_hat + ((1.0 - self.beta1) * layer.grad_b) / (1.0 - self.beta1 ** self.t)
 
-            # RMSProp
-            elif self.optimizer_type == "rmsprop":
-                self.v_W[idx] = self.beta2 * self.v_W[idx] + (1.0 - self.beta2) * (grad_W ** 2)
-                self.v_b[idx] = self.beta2 * self.v_b[idx] + (1.0 - self.beta2) * (grad_b ** 2)
+                layer.W -= self.learning_rate * nesterov_W / (np.sqrt(v_W_hat) + self.epsilon)
+                layer.b -= self.learning_rate * nesterov_b / (np.sqrt(v_b_hat) + self.epsilon)
 
-                layer.W -= (self.lr * grad_W) / (np.sqrt(self.v_W[idx]) + self.epsilon)
-                layer.b -= (self.lr * grad_b) / (np.sqrt(self.v_b[idx]) + self.epsilon)
-
-            # Adam
-            elif self.optimizer_type == "adam":
-                self.m_W[idx] = self.beta1 * self.m_W[idx] + (1.0 - self.beta1) * grad_W
-                self.m_b[idx] = self.beta1 * self.m_b[idx] + (1.0 - self.beta1) * grad_b
-
-                self.v_W[idx] = self.beta2 * self.v_W[idx] + (1.0 - self.beta2) * (grad_W ** 2)
-                self.v_b[idx] = self.beta2 * self.v_b[idx] + (1.0 - self.beta2) * (grad_b ** 2)
-
-                mW_hat = self.m_W[idx] / (1.0 - self.beta1 ** self.t)
-                mB_hat = self.m_b[idx] / (1.0 - self.beta1 ** self.t)
-
-                vW_hat = self.v_W[idx] / (1.0 - self.beta2 ** self.t)
-                vB_hat = self.v_b[idx] / (1.0 - self.beta2 ** self.t)
-
-                layer.W -= self.lr * mW_hat / (np.sqrt(vW_hat) + self.epsilon)
-                layer.b -= self.lr * mB_hat / (np.sqrt(vB_hat) + self.epsilon)
-
-            # Nadam
-            elif self.optimizer_type == "nadam":
-                self.m_W[idx] = self.beta1 * self.m_W[idx] + (1.0 - self.beta1) * grad_W
-                self.m_b[idx] = self.beta1 * self.m_b[idx] + (1.0 - self.beta1) * grad_b
-
-                self.v_W[idx] = self.beta2 * self.v_W[idx] + (1.0 - self.beta2) * (grad_W ** 2)
-                self.v_b[idx] = self.beta2 * self.v_b[idx] + (1.0 - self.beta2) * (grad_b ** 2)
-
-                mW_hat = self.m_W[idx] / (1.0 - self.beta1 ** self.t)
-                mB_hat = self.m_b[idx] / (1.0 - self.beta1 ** self.t)
-
-                vW_hat = self.v_W[idx] / (1.0 - self.beta2 ** self.t)
-                vB_hat = self.v_b[idx] / (1.0 - self.beta2 ** self.t)
-
-                mW_nesterov = self.beta1 * mW_hat + ((1.0 - self.beta1) * grad_W) / (1.0 - self.beta1 ** self.t)
-                mB_nesterov = self.beta1 * mB_hat + ((1.0 - self.beta1) * grad_b) / (1.0 - self.beta1 ** self.t)
-
-                layer.W -= self.lr * mW_nesterov / (np.sqrt(vW_hat) + self.epsilon)
-                layer.b -= self.lr * mB_nesterov / (np.sqrt(vB_hat) + self.epsilon)
-
-            else:
-                raise ValueError(f"Unsupported optimizer: {self.optimizer_type}")
+        else:
+            raise ValueError("Unknown optimizer")

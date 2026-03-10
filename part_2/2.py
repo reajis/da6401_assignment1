@@ -12,7 +12,7 @@ if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
 from ann.r_neural_network import NeuralNetwork
-from ann.optimizers import Optimizer
+from ann.r_optimizers import Optimizer
 from ann.r_objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,

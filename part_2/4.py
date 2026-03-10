@@ -11,7 +11,7 @@ if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
 from ann.r_neural_network import NeuralNetwork
-from ann.optimizers import Optimizer
+from ann.r_optimizers import Optimizer
 from ann.r_objective_functions import cross_entropy_derivative
 from utils.r_data_loader import load_and_preprocess_data, get_batches
 

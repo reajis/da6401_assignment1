@@ -11,7 +11,7 @@ import wandb
 from sklearn.metrics import f1_score
 
 from ann.r_neural_network import NeuralNetwork
-from ann.optimizers import Optimizer
+from ann.r_optimizers import Optimizer
 from ann.r_objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,
