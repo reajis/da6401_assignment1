@@ -13,7 +13,6 @@ class NeuralNetwork:
         activation="relu",
         weight_init="random"
     ):
-        # Support config passed as Namespace or dict
         cfg = None
         if isinstance(input_size, Namespace):
             cfg = vars(input_size)
@@ -34,7 +33,6 @@ class NeuralNetwork:
             activation = cfg.get("activation", activation)
             weight_init = cfg.get("weight_init", weight_init)
 
-        # Normalize hidden sizes
         if hidden_sizes is None:
             hidden_sizes = []
         elif isinstance(hidden_sizes, int):
@@ -44,7 +42,6 @@ class NeuralNetwork:
         else:
             hidden_sizes = list(hidden_sizes)
 
-        # Infer num_layers if not provided
         if num_layers is None:
             num_layers = len(hidden_sizes)
 
@@ -52,7 +49,6 @@ class NeuralNetwork:
         output_size = int(output_size)
         num_layers = int(num_layers)
 
-        # Expand/validate hidden sizes
         if num_layers == 0:
             hidden_sizes = []
         else:
@@ -74,9 +70,6 @@ class NeuralNetwork:
         self._build_layers_from_dims([self.input_size] + self.hidden_sizes + [self.output_size])
 
     def _build_layers_from_dims(self, dims):
-        """
-        Build layers from a list like [input_dim, h1, h2, ..., output_dim]
-        """
         if len(dims) < 2:
             raise ValueError("dims must contain at least input and output dimensions")
 
@@ -105,8 +98,8 @@ class NeuralNetwork:
             activations.append(out)
         return out, activations
 
-    def backward(self, dA):
-        grad = dA
+    def backward(self, grad_output):
+        grad = grad_output
         for layer in reversed(self.layers):
             grad = layer.backward(grad)
         return grad
@@ -122,17 +115,9 @@ class NeuralNetwork:
         return weights
 
     def set_weights(self, weights):
-        """
-        Flexible loader:
-        - accepts dict format: {"W1":..., "b1":..., "W2":..., "b2":...}
-        - accepts old list/tuple format: [{"W":..., "b":...}, ...]
-        - rebuilds architecture if the current one does not match loaded weights
-        """
-        # Handle np.load(..., allow_pickle=True) object arrays
         if isinstance(weights, np.ndarray) and weights.shape == ():
             weights = weights.item()
 
-        # Support old list-of-dicts format too
         if isinstance(weights, (list, tuple)):
             converted = {}
             for i, item in enumerate(weights, start=1):
@@ -145,7 +130,6 @@ class NeuralNetwork:
         if not isinstance(weights, dict):
             raise ValueError(f"Expected weights to be a dict, got {type(weights).__name__}")
 
-        # Collect layer indices in order
         layer_ids = sorted(
             int(k[1:]) for k in weights.keys()
             if k.startswith("W") and k[1:].isdigit()
@@ -154,7 +138,6 @@ class NeuralNetwork:
         if not layer_ids:
             raise ValueError("No weight keys like W1, W2, ... found in weights dict")
 
-        # Infer architecture from weights
         dims = []
         processed = {}
 
@@ -172,7 +155,6 @@ class NeuralNetwork:
             if W.ndim != 2:
                 raise ValueError(f"{w_key} must be 2D, got shape {W.shape}")
 
-            # Normalize bias shape to (1, out_dim)
             if b.ndim == 1:
                 b = b.reshape(1, -1)
             elif b.ndim == 2 and b.shape[1] == 1:
@@ -196,7 +178,6 @@ class NeuralNetwork:
             prev_out_dim = W.shape[1]
             processed[i] = (W, b)
 
-        # Rebuild model architecture if needed
         rebuild_needed = (
             len(self.layers) != len(layer_ids) or
             any(
@@ -209,7 +190,6 @@ class NeuralNetwork:
         if rebuild_needed:
             self._build_layers_from_dims(dims)
 
-        # Assign weights
         for i in layer_ids:
             self.layers[i - 1].W = processed[i][0]
             self.layers[i - 1].b = processed[i][1]

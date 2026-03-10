@@ -11,9 +11,9 @@ SRC_DIR = os.path.join(ROOT_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
-from ann.neural_network import NeuralNetwork
+from ann.r_neural_network import NeuralNetwork
 from ann.optimizers import Optimizer
-from ann.objective_functions import (
+from ann.r_objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,
     cross_entropy,

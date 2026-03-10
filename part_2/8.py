@@ -12,7 +12,7 @@ SRC_DIR = os.path.join(ROOT_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.append(SRC_DIR)
 
-from ann.neural_network import NeuralNetwork
+from ann.r_neural_network import NeuralNetwork
 from utils.r_data_loader import load_and_preprocess_data
 
 

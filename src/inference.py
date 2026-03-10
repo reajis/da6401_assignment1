@@ -8,8 +8,8 @@ import os
 import numpy as np
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-from ann.neural_network import NeuralNetwork
-from ann.objective_functions import cross_entropy, mean_squared_error
+from ann.r_neural_network import NeuralNetwork
+from ann.r_objective_functions import cross_entropy, mean_squared_error
 from utils.r_data_loader import load_and_preprocess_data
 
 

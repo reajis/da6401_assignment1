@@ -10,9 +10,9 @@ import numpy as np
 import wandb
 from sklearn.metrics import f1_score
 
-from ann.neural_network import NeuralNetwork
+from ann.r_neural_network import NeuralNetwork
 from ann.optimizers import Optimizer
-from ann.objective_functions import (
+from ann.r_objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,
     cross_entropy,
@@ -110,22 +110,26 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def one_hot_encode(y, num_classes=10):
+    return np.eye(num_classes)[y]
+
+
 def calculate_accuracy(y_true, y_pred):
-    true_labels = np.argmax(y_true, axis=1)
     pred_labels = np.argmax(y_pred, axis=1)
-    return np.mean(true_labels == pred_labels)
+    return np.mean(y_true == pred_labels)
 
 
 def calculate_macro_f1(y_true, y_pred):
-    true_labels = np.argmax(y_true, axis=1)
     pred_labels = np.argmax(y_pred, axis=1)
-    return f1_score(true_labels, pred_labels, average="macro")
+    return f1_score(y_true, pred_labels, average="macro")
 
 
-def evaluate_split(model, X, y, loss_fn):
+def evaluate_split(model, X, y, loss_fn, num_classes=10):
     y_pred, _ = model.forward(X)
+    y_true_onehot = one_hot_encode(y, num_classes)
+
     metrics = {
-        "loss": loss_fn(y, y_pred),
+        "loss": loss_fn(y_true_onehot, y_pred),
         "accuracy": calculate_accuracy(y, y_pred),
         "f1": calculate_macro_f1(y, y_pred)
     }
@@ -176,12 +180,13 @@ def main():
     save_outputs = not (wandb.run is not None and wandb.run.sweep_id is not None)
 
     print(f"Loading {args.dataset} dataset")
-    (X_train, y_train), (X_val, y_val), (X_test, y_test) = load_and_preprocess_data(
+    X_train, y_train, X_val, y_val, X_test, y_test = load_and_preprocess_data(
         dataset_name=args.dataset
     )
 
     input_size = X_train.shape[1]
-    output_size = y_train.shape[1]
+    output_size = 10   # integer labels now, so fix output classes explicitly
+    num_classes = output_size
 
     model = NeuralNetwork(
         input_size=input_size,
@@ -218,16 +223,18 @@ def main():
         num_batches = 0
 
         for X_batch, y_batch in get_batches(X_train, y_train, args.batch_size):
+            y_batch_onehot = one_hot_encode(y_batch, num_classes)
+
             y_pred, _ = model.forward(X_batch)
 
-            batch_loss = loss_fn(y_batch, y_pred)
+            batch_loss = loss_fn(y_batch_onehot, y_pred)
             batch_acc = calculate_accuracy(y_batch, y_pred)
 
             train_loss_total += batch_loss
             train_acc_total += batch_acc
             num_batches += 1
 
-            dA = loss_derivative_fn(y_batch, y_pred)
+            dA = loss_derivative_fn(y_batch_onehot, y_pred)
             model.backward(dA)
 
             optimizer.step()
@@ -235,8 +242,8 @@ def main():
         avg_train_loss = train_loss_total / num_batches
         avg_train_acc = train_acc_total / num_batches
 
-        val_metrics = evaluate_split(model, X_val, y_val, loss_fn)
-        test_metrics = evaluate_split(model, X_test, y_test, loss_fn)
+        val_metrics = evaluate_split(model, X_val, y_val, loss_fn, num_classes)
+        test_metrics = evaluate_split(model, X_test, y_test, loss_fn, num_classes)
 
         best_val_accuracy = max(best_val_accuracy, val_metrics["accuracy"])
 

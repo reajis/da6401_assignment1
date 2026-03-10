@@ -1,49 +1,54 @@
 """
 Loss/Objective Functions and Their Derivatives
-Implements: Cross-Entropy, Mean Squared Error (MSE)
+Compatible with train.py:
+- y_true is one-hot encoded
+- y_pred is softmax probability output
 """
 import numpy as np
 
-# MEAN SQUARED ERROR 
 
 def mean_squared_error(y_true, y_pred):
     """
-    Computes Mean Squared Error.
-    Returns a scalar.
+    MSE between one-hot labels and predicted probabilities.
     """
-    return np.mean((y_true - y_pred) ** 2)
+    return np.mean((y_pred - y_true) ** 2)
+
 
 def mean_squared_error_derivative(y_true, y_pred):
     """
-    Computes derivative of MSE w.r.t y_pred.
-    Returns matrix same shape as y_pred.
+    Returns dL/dZ for softmax output layer using MSE loss,
+    not merely dL/dA. This matches the ideal-case behavior.
+
+    y_true: one-hot labels
+    y_pred: softmax probabilities
     """
-    return 2 * (y_pred - y_true) / y_pred.size
+    batch_size = y_true.shape[0]
+
+    # dL/dA
+    dA = 2.0 * (y_pred - y_true) / batch_size
+
+    # softmax Jacobian contraction: dZ = s * (dA - sum(dA*s))
+    dot = np.sum(dA * y_pred, axis=1, keepdims=True)
+    dZ = y_pred * (dA - dot)
+
+    return dZ
 
 
-# categorical cross entropy
 def cross_entropy(y_true, y_pred):
     """
-    Computes categorical cross-entropy loss.
-    Returns scalar loss.
+    Cross-entropy loss using one-hot labels and predicted probabilities.
     """
-    # Prevent log(0)
-    y_pred_clipped = np.clip(y_pred, 1e-15, 1 - 1e-15)
-    
-    N = y_pred.shape[0]
-    
-    loss = -np.sum(y_true * np.log(y_pred_clipped)) / N
-    return loss
+    y_pred = np.clip(y_pred, 1e-12, 1.0)
+    return -np.mean(np.sum(y_true * np.log(y_pred), axis=1))
+
 
 def cross_entropy_derivative(y_true, y_pred):
     """
-    Computes derivative of categorical cross-entropy.
-    Returns gradient matrix.
+    Returns dL/dZ directly for softmax + cross-entropy.
+    This is the ideal-case simplified gradient.
+
+    y_true: one-hot labels
+    y_pred: softmax probabilities
     """
-    # Prevent division by zero
-    y_pred_clipped = np.clip(y_pred, 1e-15, 1 - 1e-15)
-    
-    N = y_pred.shape[0]
-    
-    #scale the derivative by batch size (N)
-    return -(y_true / y_pred_clipped) / N
+    batch_size = y_true.shape[0]
+    return (y_pred - y_true) / batch_size

@@ -2,7 +2,7 @@ import os
 import numpy as np
 import argparse
 from sklearn.metrics import f1_score
-from ann.neural_network import NeuralNetwork
+from ann.r_neural_network import NeuralNetwork
 
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
