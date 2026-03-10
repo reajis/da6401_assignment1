@@ -10,15 +10,15 @@ import numpy as np
 import wandb
 from sklearn.metrics import f1_score
 
-from ann.neural_network import NeuralNetwork
+from ann.r_neural_network import NeuralNetwork
 from ann.optimizers import Optimizer
-from ann.objective_functions import (
+from ann.r_objective_functions import (
     mean_squared_error,
     mean_squared_error_derivative,
     cross_entropy,
     cross_entropy_derivative
 )
-from utils.data_loader import load_and_preprocess_data, get_batches
+from utils.r_data_loader import load_and_preprocess_data, get_batches
 
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -1,96 +1,59 @@
-"""
-Neural Layer Implementation
-Handles weight initialization, forward pass, and gradient computation
-"""
-
 import numpy as np
-from .activations import (
-    sigmoid,
-    sigmoid_derivative,
-    tanh,
-    tanh_derivative,
-    relu,
-    relu_derivative,
-    softmax
-)
+from ann.activations import sigmoid, tanh, relu
+from ann.activations import sigmoid_derivative, tanh_derivative, relu_derivative
 
 
-class NeuralLayer:
-    def __init__(self, input_size, output_size, activation="relu", weight_init="random"):
-        self.input_size = int(input_size)
-        self.output_size = int(output_size)
-        self.activation_name = activation
-
-        # Weight initialization
+class DenseLayer:
+    def __init__(self, input_dim, output_dim, activation=None, weight_init="xavier"):
         if weight_init == "xavier":
-            limit = np.sqrt(6.0 / (self.input_size + self.output_size))
-            self.W = np.random.uniform(-limit, limit, (self.input_size, self.output_size))
-        elif weight_init == "random":
-            self.W = 0.01 * np.random.randn(self.input_size, self.output_size)
+            limit = np.sqrt(6.0 / (input_dim + output_dim))
+            self.W = np.random.uniform(-limit, limit, (input_dim, output_dim))
+        elif weight_init == "zeros":
+            self.W = np.zeros((input_dim, output_dim))
         else:
-            raise ValueError("weight_init must be 'random' or 'xavier'")
+            self.W = 0.01 * np.random.randn(input_dim, output_dim)
 
-        self.b = np.zeros((1, self.output_size))
-
-        # Cache
-        self.X = None
-        self.Z = None
-        self.A = None
-
-        # Gradients
+        self.b = np.zeros((1, output_dim))
+        self.activation = activation
+        self.input = None
+        self.z = None
+        self.output = None
         self.grad_W = None
         self.grad_b = None
 
-    def forward(self, X):
-        self.X = X
-        self.Z = X @ self.W + self.b
+    def activate(self, z):
+        if self.activation == "sigmoid":
+            return sigmoid(z)
+        if self.activation == "tanh":
+            return tanh(z)
+        if self.activation == "relu":
+            return relu(z)
+        return z
 
-        if self.activation_name == "relu":
-            self.A = relu(self.Z)
-        elif self.activation_name == "sigmoid":
-            self.A = sigmoid(self.Z)
-        elif self.activation_name == "tanh":
-            self.A = tanh(self.Z)
-        elif self.activation_name == "softmax":
-            self.A = softmax(self.Z)
-        elif self.activation_name in [None, "linear"]:
-            self.A = self.Z
-        else:
-            raise ValueError(f"Unsupported activation: {self.activation_name}")
+    def activation_grad(self, z):
+        if self.activation == "sigmoid":
+            return sigmoid_derivative(z)
+        if self.activation == "tanh":
+            return tanh_derivative(z)
+        if self.activation == "relu":
+            return relu_derivative(z)
+        return np.ones_like(z)
 
-        return self.A
+    def forward(self, x):
+        self.input = x
+        self.z = x @ self.W + self.b
+        self.output = self.activate(self.z)
+        return self.output
 
-    def backward(self, grad_output):
-        """
-        grad_output means:
-        - for hidden layers: dL/dA
-        - for softmax output layer: already dL/dZ
-          (because objective_functions returns the ideal-case gradient)
-        """
+    def backward(self, grad_output, weight_decay=0.0):
+        grad_z = grad_output * self.activation_grad(self.z)
+        self.grad_W = self.input.T @ grad_z + weight_decay * self.W
+        self.grad_b = np.sum(grad_z, axis=0, keepdims=True)
+        grad_input = grad_z @ self.W.T
+        return grad_input
 
-        if self.activation_name == "relu":
-            dZ = grad_output * relu_derivative(self.Z)
-
-        elif self.activation_name == "sigmoid":
-            dZ = grad_output * sigmoid_derivative(self.Z)
-
-        elif self.activation_name == "tanh":
-            dZ = grad_output * tanh_derivative(self.Z)
-
-        elif self.activation_name == "softmax":
-            # IMPORTANT:
-            # For softmax + CE / softmax + MSE in our setup,
-            # the loss derivative already returns dL/dZ.
-            dZ = grad_output
-
-        elif self.activation_name in [None, "linear"]:
-            dZ = grad_output
-
-        else:
-            raise ValueError(f"Unsupported activation: {self.activation_name}")
-
-        self.grad_W = self.X.T @ dZ
-        self.grad_b = np.sum(dZ, axis=0, keepdims=True)
-        grad_input = dZ @ self.W.T
-
+    def backward_linear(self, grad_z, weight_decay=0.0):
+        self.grad_W = self.input.T @ grad_z + weight_decay * self.W
+        self.grad_b = np.sum(grad_z, axis=0, keepdims=True)
+        grad_input = grad_z @ self.W.T
         return grad_input

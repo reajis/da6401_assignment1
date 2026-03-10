@@ -1,54 +1,36 @@
-"""
-Loss/Objective Functions and Their Derivatives
-Compatible with train.py:
-- y_true is one-hot encoded
-- y_pred is softmax probability output
-"""
 import numpy as np
+from ann.activations import softmax
 
 
-def mean_squared_error(y_true, y_pred):
-    """
-    MSE between one-hot labels and predicted probabilities.
-    """
-    return np.mean((y_pred - y_true) ** 2)
+def one_hot(y, num_classes):
+    y = y.astype(int)
+    out = np.zeros((y.shape[0], num_classes))
+    out[np.arange(y.shape[0]), y] = 1
+    return out
 
 
-def mean_squared_error_derivative(y_true, y_pred):
-    """
-    Returns dL/dZ for softmax output layer using MSE loss,
-    not merely dL/dA. This matches the ideal-case behavior.
+def cross_entropy_loss(logits, y_true):
+    probs = softmax(logits)
+    probs = np.clip(probs, 1e-12, 1.0)
+    return -np.mean(np.log(probs[np.arange(len(y_true)), y_true]))
 
-    y_true: one-hot labels
-    y_pred: softmax probabilities
-    """
-    batch_size = y_true.shape[0]
 
-    # dL/dA
-    dA = 2.0 * (y_pred - y_true) / batch_size
+def cross_entropy_grad(logits, y_true):
+    probs = softmax(logits)
+    probs[np.arange(len(y_true)), y_true] -= 1
+    return probs / len(y_true)
 
-    # softmax Jacobian contraction: dZ = s * (dA - sum(dA*s))
-    dot = np.sum(dA * y_pred, axis=1, keepdims=True)
-    dZ = y_pred * (dA - dot)
 
+def mse_loss(logits, y_true):
+    probs = softmax(logits)
+    y_one = one_hot(y_true, probs.shape[1])
+    return np.mean((probs - y_one) ** 2)
+
+
+def mse_grad(logits, y_true):
+    probs = softmax(logits)
+    y_one = one_hot(y_true, probs.shape[1])
+    dA = 2.0 * (probs - y_one) / len(y_true)
+    dot = np.sum(dA * probs, axis=1, keepdims=True)
+    dZ = probs * (dA - dot)
     return dZ
-
-
-def cross_entropy(y_true, y_pred):
-    """
-    Cross-entropy loss using one-hot labels and predicted probabilities.
-    """
-    y_pred = np.clip(y_pred, 1e-12, 1.0)
-    return -np.mean(np.sum(y_true * np.log(y_pred), axis=1))
-
-
-def cross_entropy_derivative(y_true, y_pred):
-    """
-    Returns dL/dZ directly for softmax + cross-entropy.
-    This is the ideal-case simplified gradient.
-
-    y_true: one-hot labels
-    y_pred: softmax probabilities
-    """
-    batch_size = y_true.shape[0]
-    return (y_pred - y_true) / batch_size

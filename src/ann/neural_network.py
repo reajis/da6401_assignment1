@@ -1,159 +1,142 @@
-from argparse import Namespace
 import numpy as np
-from .neural_layer import NeuralLayer
+from ann.activations import softmax
+from ann.neural_layer import DenseLayer
+from ann.objective_functions import cross_entropy_loss, cross_entropy_grad
+from ann.objective_functions import mse_loss, mse_grad
+from ann.optimizers import Optimizer
 
 
 class NeuralNetwork:
     def __init__(
         self,
-        input_size=784,
-        hidden_sizes=None,
-        num_layers=None,
-        output_size=10,
+        cli_args=None,
+        input_dim=None,
+        hidden_layers=None,
+        output_dim=None,
         activation="relu",
-        weight_init="random"
+        loss="cross_entropy",
+        weight_init="xavier",
+        learning_rate=0.001,
+        optimizer_name="adam",
+        weight_decay=0.0,
     ):
-        cfg = None
-        if isinstance(input_size, Namespace):
-            cfg = vars(input_size)
-        elif isinstance(input_size, dict):
-            cfg = input_size
+        
+        if cli_args is not None:
+            input_dim = 784
+            output_dim = 10
 
-        if cfg is not None:
-            input_size = cfg.get("input_size", cfg.get("input_dim", cfg.get("n_input", 784)))
-            hidden_sizes = cfg.get(
-                "hidden_sizes",
-                cfg.get("hidden_size", cfg.get("sizes", hidden_sizes))
-            )
-            num_layers = cfg.get("num_layers", cfg.get("nhl", cfg.get("n_hidden_layers", num_layers)))
-            output_size = cfg.get(
-                "output_size",
-                cfg.get("output_dim", cfg.get("num_classes", cfg.get("n_classes", 10)))
-            )
-            activation = cfg.get("activation", activation)
-            weight_init = cfg.get("weight_init", weight_init)
+            num_layers = getattr(cli_args, "num_layers", getattr(cli_args, "hidden_layers", 1))
+            hidden_size = getattr(cli_args, "hidden_size", getattr(cli_args, "num_neurons", [64]))
 
-        if hidden_sizes is None:
-            hidden_sizes = []
-        elif isinstance(hidden_sizes, int):
-            hidden_sizes = [hidden_sizes]
-        elif isinstance(hidden_sizes, str):
-            hidden_sizes = [int(x.strip()) for x in hidden_sizes.split(",") if x.strip()]
-        else:
-            hidden_sizes = list(hidden_sizes)
+            if isinstance(hidden_size, int):
+                hidden_layers = [hidden_size] * num_layers
+            else:
+                hidden_layers = list(hidden_size)
+                if len(hidden_layers) == 1:
+                    hidden_layers = hidden_layers * num_layers
 
-        if num_layers is None:
-            num_layers = len(hidden_sizes)
+            activation = getattr(cli_args, "activation", activation)
+            loss = getattr(cli_args, "loss", loss)
+            weight_init = getattr(cli_args, "weight_init", weight_init)
+            learning_rate = getattr(cli_args, "learning_rate", learning_rate)
+            optimizer_name = getattr(cli_args, "optimizer", optimizer_name)
+            weight_decay = getattr(cli_args, "weight_decay", weight_decay)
 
-        input_size = int(input_size)
-        output_size = int(output_size)
-        num_layers = int(num_layers)
-
-        if num_layers == 0:
-            hidden_sizes = []
-        else:
-            if len(hidden_sizes) == 0:
-                raise ValueError("hidden_sizes must be provided when num_layers > 0")
-            if len(hidden_sizes) == 1 and num_layers > 1:
-                hidden_sizes = hidden_sizes * num_layers
-            elif len(hidden_sizes) != num_layers:
-                raise ValueError("num_layers must match length of hidden_sizes")
-
-        self.input_size = input_size
-        self.hidden_sizes = [int(x) for x in hidden_sizes]
-        self.num_layers = num_layers
-        self.output_size = output_size
-        self.activation = activation
-        self.weight_init = weight_init
-        self.layers = []
-
-        dims = [self.input_size] + self.hidden_sizes + [self.output_size]
-        self._build_layers_from_dims(dims)
-
-    def _build_layers_from_dims(self, dims):
-        if len(dims) < 2:
-            raise ValueError("dims must contain at least input and output dimensions")
-
-        self.input_size = int(dims[0])
-        self.output_size = int(dims[-1])
-        self.hidden_sizes = [int(x) for x in dims[1:-1]]
-        self.num_layers = len(self.hidden_sizes)
+        if input_dim is None:
+            input_dim = 784
+        if output_dim is None:
+            output_dim = 10
+        if hidden_layers is None:
+            hidden_layers = [64]
 
         self.layers = []
+        dims = [input_dim] + hidden_layers + [output_dim]
+
         for i in range(len(dims) - 1):
-            act = self.activation if i < len(dims) - 2 else "softmax"
-            self.layers.append(
-                NeuralLayer(
-                    input_size=int(dims[i]),
-                    output_size=int(dims[i + 1]),
-                    activation=act,
-                    weight_init=self.weight_init
-                )
-            )
+            act = activation if i < len(dims) - 2 else None
+            layer = DenseLayer(dims[i], dims[i + 1], activation=act, weight_init=weight_init)
+            self.layers.append(layer)
+
+        self.loss = loss
+        self.weight_decay = weight_decay
+        self.optimizer = Optimizer(name=optimizer_name, learning_rate=learning_rate)
+        self.optimizer.setup(self.layers)
+        self.grad_W = None
+        self.grad_b = None
+        self.last_hidden_output = None
 
     def forward(self, X):
-        activations = [X]
         out = X
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
             out = layer.forward(out)
-            activations.append(out)
-        return out, activations
+            if i == 0:
+                self.last_hidden_output = out.copy()
+        return out
 
-    def backward(self, grad_output):
-        grad = grad_output
-        for layer in reversed(self.layers):
-            grad = layer.backward(grad)
-        return grad
+    def compute_loss(self, logits, y_true):
+        if self.loss == "cross_entropy":
+            return cross_entropy_loss(logits, y_true)
+        return mse_loss(logits, y_true)
 
-    def get_layers(self):
-        return self.layers
+    def backward(self, y_true, y_pred):
+        if self.loss == "cross_entropy":
+            grad = cross_entropy_grad(y_pred, y_true)
+        else:
+            grad = mse_grad(y_pred, y_true)
+
+        grad_W_list = []
+        grad_b_list = []
+
+        grad = self.layers[-1].backward_linear(grad, self.weight_decay)
+        grad_W_list.append(self.layers[-1].grad_W.copy())
+        grad_b_list.append(self.layers[-1].grad_b.copy())
+
+        for layer in reversed(self.layers[:-1]):
+            grad = layer.backward(grad, self.weight_decay)
+            grad_W_list.append(layer.grad_W.copy())
+            grad_b_list.append(layer.grad_b.copy())
+
+        self.grad_W = grad_W_list
+        self.grad_b = grad_b_list
+        return self.grad_W, self.grad_b
+
+    def update_weights(self):
+        self.optimizer.step(self.layers)
+
+    def train_batch(self, X, y):
+        logits = self.forward(X)
+        loss = self.compute_loss(logits, y)
+        self.backward(y, logits)
+        self.update_weights()
+        return loss
+
+    def predict_proba(self, X):
+        logits = self.forward(X)
+        return softmax(logits)
+
+    def predict(self, X):
+        probs = self.predict_proba(X)
+        return np.argmax(probs, axis=1)
+
+    def evaluate(self, X, y):
+        logits = self.forward(X)
+        loss = self.compute_loss(logits, y)
+        preds = np.argmax(softmax(logits), axis=1)
+        accuracy = np.mean(preds == y)
+        return loss, accuracy, preds
 
     def get_weights(self):
-        weights = {}
-        for i, layer in enumerate(self.layers, start=1):
-            weights[f"W{i}"] = layer.W.copy()
-            weights[f"b{i}"] = layer.b.copy()
-        return weights
+        d = {}
+        for i, layer in enumerate(self.layers):
+            d[f"W{i}"] = layer.W.copy()
+            d[f"b{i}"] = layer.b.copy()
+        return d
 
-    def set_weights(self, weights):
-        if isinstance(weights, np.ndarray) and weights.shape == ():
-            weights = weights.item()
-
-        if isinstance(weights, (list, tuple)):
-            converted = {}
-            for i, item in enumerate(weights, start=1):
-                if not isinstance(item, dict) or "W" not in item or "b" not in item:
-                    raise ValueError("List format must be [{'W':..., 'b':...}, ...]")
-                converted[f"W{i}"] = item["W"]
-                converted[f"b{i}"] = item["b"]
-            weights = converted
-
-        if not isinstance(weights, dict):
-            raise ValueError(f"Expected weights to be a dict, got {type(weights).__name__}")
-
-        for i, layer in enumerate(self.layers, start=1):
+    def set_weights(self, weight_dict):
+        for i, layer in enumerate(self.layers):
             w_key = f"W{i}"
             b_key = f"b{i}"
-
-            if w_key not in weights or b_key not in weights:
-                raise ValueError(f"Missing {w_key} or {b_key} in weights dict")
-
-            W = np.array(weights[w_key], dtype=float, copy=True)
-            b = np.array(weights[b_key], dtype=float, copy=True)
-
-            if b.ndim == 1:
-                b = b.reshape(1, -1)
-            elif b.ndim == 2 and b.shape[1] == 1:
-                b = b.T
-
-            if W.shape != layer.W.shape:
-                raise ValueError(
-                    f"{w_key} shape {W.shape} does not match model layer shape {layer.W.shape}"
-                )
-            if b.shape != layer.b.shape:
-                raise ValueError(
-                    f"{b_key} shape {b.shape} does not match model layer shape {layer.b.shape}"
-                )
-
-            layer.W = W
-            layer.b = b
+            if w_key in weight_dict:
+                layer.W = weight_dict[w_key].copy()
+            if b_key in weight_dict:
+                layer.b = weight_dict[b_key].copy()
